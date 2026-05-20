@@ -1,0 +1,20 @@
+process.env.NODE_ENV = 'test';
+process.env.PORT = '8080';
+process.env.SUPABASE_URL = 'https://example.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key-stub-for-tests';
+process.env.INNGEST_EVENT_KEY = 'test-event-key';
+process.env.INNGEST_SIGNING_KEY = 'test-signing-key';
+process.env.INNGEST_APP_ID = 'clipper-worker-test';
+process.env.TOKEN_ENCRYPTION_KEY =
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+process.env.TWITCH_CLIENT_ID = 'twitch-id';
+process.env.TWITCH_CLIENT_SECRET = 'twitch-secret';
+process.env.TWITCH_EVENTSUB_SECRET = 'twitch-eventsub-secret-stub';
+process.env.GROQ_API_KEY = 'groq-key';
+process.env.ANTHROPIC_API_KEY = 'anth-key';
+process.env.VAPID_PUBLIC_KEY = 'vapid-public';
+process.env.VAPID_PRIVATE_KEY = 'vapid-private';
+process.env.VAPID_SUBJECT = 'mailto:test@example.com';
+process.env.FRONTEND_URL = 'https://app.example.com';
+process.env.COST_RAILS_ENFORCEMENT = 'false';
+process.env.SENTRY_DSN = '';

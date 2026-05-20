@@ -2,7 +2,15 @@ import { config } from '../config.js';
 import type { UserRow } from '../types/db.js';
 import { decryptToken, encryptToken } from './crypto.js';
 import { logger } from './logger.js';
+import { fetchWithRetry, HttpStatusError } from './retry.js';
 import { supabase } from './supabase.js';
+
+function describe(tag: string, err: unknown): Error {
+  if (err instanceof HttpStatusError) {
+    return new Error(`${tag} failed: ${err.status} ${err.body}`);
+  }
+  return err instanceof Error ? err : new Error(`${tag} failed: ${String(err)}`);
+}
 
 const HELIX = 'https://api.twitch.tv/helix';
 const OAUTH = 'https://id.twitch.tv/oauth2';
@@ -70,12 +78,17 @@ export async function refreshTwitchToken(refreshToken: string): Promise<{
     client_id: config.TWITCH_CLIENT_ID,
     client_secret: config.TWITCH_CLIENT_SECRET,
   });
-  const res = await fetch(`${OAUTH}/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body,
+  const res = await fetchWithRetry(
+    `${OAUTH}/token`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    },
+    { tag: 'twitch.refresh' },
+  ).catch((err) => {
+    throw describe('twitch refresh', err);
   });
-  if (!res.ok) throw new Error(`twitch refresh failed: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as RefreshResponse;
   return {
     accessToken: json.access_token,
@@ -97,11 +110,13 @@ export async function createTwitchClip(opts: {
   const url = new URL(`${HELIX}/clips`);
   url.searchParams.set('broadcaster_id', opts.broadcasterId);
   if (opts.hasDelay) url.searchParams.set('has_delay', 'true');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: helixHeaders(opts.accessToken),
+  const res = await fetchWithRetry(
+    url.toString(),
+    { method: 'POST', headers: helixHeaders(opts.accessToken) },
+    { tag: 'twitch.createClip' },
+  ).catch((err) => {
+    throw describe('twitch createClip', err);
   });
-  if (!res.ok) throw new Error(`twitch createClip failed: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as { data: CreatedClip[] };
   const clip = json.data?.[0];
   if (!clip) throw new Error('twitch createClip: empty response');
@@ -126,8 +141,13 @@ export async function getTwitchClip(opts: {
 }): Promise<ResolvedClip | null> {
   const url = new URL(`${HELIX}/clips`);
   url.searchParams.set('id', opts.clipId);
-  const res = await fetch(url, { headers: helixHeaders(opts.accessToken) });
-  if (!res.ok) throw new Error(`twitch getClip failed: ${res.status} ${await res.text()}`);
+  const res = await fetchWithRetry(
+    url.toString(),
+    { headers: helixHeaders(opts.accessToken) },
+    { tag: 'twitch.getClip' },
+  ).catch((err) => {
+    throw describe('twitch getClip', err);
+  });
   const json = (await res.json()) as { data: ResolvedClip[] };
   return json.data?.[0] ?? null;
 }
@@ -170,8 +190,13 @@ export async function getStreamsByUserIds(opts: {
   if (opts.userIds.length === 0) return [];
   const url = new URL(`${HELIX}/streams`);
   for (const id of opts.userIds.slice(0, 100)) url.searchParams.append('user_id', id);
-  const res = await fetch(url, { headers: helixHeaders(opts.accessToken) });
-  if (!res.ok) throw new Error(`twitch getStreams failed: ${res.status} ${await res.text()}`);
+  const res = await fetchWithRetry(
+    url.toString(),
+    { headers: helixHeaders(opts.accessToken) },
+    { tag: 'twitch.getStreams' },
+  ).catch((err) => {
+    throw describe('twitch getStreams', err);
+  });
   const json = (await res.json()) as { data: HelixStream[] };
   return json.data ?? [];
 }
@@ -215,10 +240,13 @@ export async function listBroadcasterClips(opts: {
     const startedAt = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
     url.searchParams.set('started_at', startedAt);
   }
-  const res = await fetch(url, { headers: helixHeaders(opts.accessToken) });
-  if (!res.ok) {
-    throw new Error(`twitch listClips failed: ${res.status} ${await res.text()}`);
-  }
+  const res = await fetchWithRetry(
+    url.toString(),
+    { headers: helixHeaders(opts.accessToken) },
+    { tag: 'twitch.listClips' },
+  ).catch((err) => {
+    throw describe('twitch listClips', err);
+  });
   const json = (await res.json()) as { data: HelixClip[] };
   const clips = (json.data ?? []).map<BroadcasterClip>((c) => ({
     id: c.id,
@@ -244,12 +272,17 @@ export async function getAppAccessToken(): Promise<string> {
     client_id: config.TWITCH_CLIENT_ID,
     client_secret: config.TWITCH_CLIENT_SECRET,
   });
-  const res = await fetch(`${OAUTH}/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body,
+  const res = await fetchWithRetry(
+    `${OAUTH}/token`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    },
+    { tag: 'twitch.appToken' },
+  ).catch((err) => {
+    throw describe('twitch app token', err);
   });
-  if (!res.ok) throw new Error(`twitch app token failed: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as { access_token: string };
   return json.access_token;
 }

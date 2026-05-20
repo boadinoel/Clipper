@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises';
+import type { FaceTrackResult } from './face-track.js';
 import { ffmpeg, ffprobe } from './ffmpeg.js';
 
 export async function generateThumbnail(opts: {
@@ -25,6 +27,8 @@ export interface CropOptions {
   outputPath: string;
   trimStart: number;
   trimEnd: number;
+  faceTrack?: FaceTrackResult | null;
+  sendcmdPath?: string;
 }
 
 export async function cropTo9by16(opts: CropOptions): Promise<void> {
@@ -35,9 +39,26 @@ export async function cropTo9by16(opts: CropOptions): Promise<void> {
   const targetH = srcH;
   const targetW = Math.floor((targetH * 9) / 16);
   const cropW = Math.min(targetW, srcW);
-  const cropX = Math.max(0, Math.floor((srcW - cropW) / 2));
+  const maxX = Math.max(0, srcW - cropW);
 
   const duration = Math.max(0.5, opts.trimEnd - opts.trimStart);
+
+  let vf: string;
+  if (opts.faceTrack?.usable && opts.faceTrack.centerXPerSecond.length > 0 && opts.sendcmdPath) {
+    const sendcmd = buildSendcmd({
+      points: opts.faceTrack.centerXPerSecond,
+      trimStart: opts.trimStart,
+      trimEnd: opts.trimEnd,
+      srcW,
+      cropW,
+      maxX,
+    });
+    await writeFile(opts.sendcmdPath, sendcmd, 'utf8');
+    vf = `crop=${cropW}:${targetH}:0:0:enable=1,sendcmd=f=${escapeFilterPath(opts.sendcmdPath)},scale=1080:1920:flags=lanczos`;
+  } else {
+    const cropX = Math.floor(maxX / 2);
+    vf = `crop=${cropW}:${targetH}:${cropX}:0,scale=1080:1920:flags=lanczos`;
+  }
 
   await ffmpeg([
     '-ss',
@@ -47,7 +68,7 @@ export async function cropTo9by16(opts: CropOptions): Promise<void> {
     '-t',
     String(duration),
     '-vf',
-    `crop=${cropW}:${targetH}:${cropX}:0,scale=1080:1920:flags=lanczos`,
+    vf,
     '-c:v',
     'libx264',
     '-preset',
@@ -64,4 +85,30 @@ export async function cropTo9by16(opts: CropOptions): Promise<void> {
     '+faststart',
     opts.outputPath,
   ]);
+}
+
+function buildSendcmd(opts: {
+  points: Array<{ t: number; cx: number }>;
+  trimStart: number;
+  trimEnd: number;
+  srcW: number;
+  cropW: number;
+  maxX: number;
+}): string {
+  const lines: string[] = [];
+  for (const p of opts.points) {
+    if (p.t < opts.trimStart || p.t > opts.trimEnd) continue;
+    const localT = Math.max(0, p.t - opts.trimStart);
+    const xCenter = p.cx * opts.srcW;
+    const targetX = Math.max(0, Math.min(opts.maxX, Math.round(xCenter - opts.cropW / 2)));
+    lines.push(`${localT.toFixed(3)} crop x ${targetX};`);
+  }
+  if (lines.length === 0) {
+    lines.push(`0 crop x ${Math.floor(opts.maxX / 2)};`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+function escapeFilterPath(p: string): string {
+  return p.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'");
 }

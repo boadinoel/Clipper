@@ -25,6 +25,12 @@ RUN python3 -m venv /opt/yt-dlp-venv \
     && /opt/yt-dlp-venv/bin/pip install --no-cache-dir --upgrade pip yt-dlp \
     && ln -s /opt/yt-dlp-venv/bin/yt-dlp /usr/local/bin/yt-dlp
 
+RUN python3 -m venv /opt/cv-venv \
+    && /opt/cv-venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/cv-venv/bin/pip install --no-cache-dir mediapipe opencv-python-headless numpy
+
+ENV FACE_TRACK_PYTHON=/opt/cv-venv/bin/python3
+
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     REMOTION_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
@@ -45,6 +51,7 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/src/remotion ./src/remotion
+COPY scripts ./scripts
 
 EXPOSE 8080
 CMD ["node", "--enable-source-maps", "dist/index.js"]

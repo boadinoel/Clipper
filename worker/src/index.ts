@@ -1,9 +1,15 @@
+import { loadConfig } from './config.js';
+import { captureException, initSentry } from './lib/sentry.js';
+
+loadConfig();
+initSentry();
+
 import { serve as honoServe } from '@hono/node-server';
 import { Hono } from 'hono';
 import { logger as honoLogger } from 'hono/logger';
-import { loadConfig } from './config.js';
 import { chatManager } from './chat/manager.js';
 import { logger } from './lib/logger.js';
+import { adminRoute } from './routes/admin.js';
 import { healthRoute } from './routes/health.js';
 import { inngestRoute } from './routes/inngest.js';
 import { instagramOauthRoute } from './routes/oauth/instagram-callback.js';
@@ -18,9 +24,18 @@ import { twitchEventSubClient } from './streams/twitch-eventsub-ws.js';
 const cfg = loadConfig();
 
 const app = new Hono();
+app.use('*', async (c, next) => {
+  try {
+    await next();
+  } catch (err) {
+    captureException(err, { tags: { route: c.req.path, method: c.req.method } });
+    throw err;
+  }
+});
 app.use('*', honoLogger((msg) => logger.info({ msg }, 'http')));
 
 app.route('/', healthRoute);
+app.route('/', adminRoute);
 app.route('/', inngestRoute);
 app.route('/', twitchEventsubRoute);
 app.route('/', kickWebhookRoute);
@@ -32,7 +47,8 @@ app.route('/', xOauthRoute);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
 app.onError((err, c) => {
-  logger.error({ err: err.message, stack: err.stack }, 'unhandled error');
+  logger.error({ err: err.message, stack: err.stack, path: c.req.path }, 'unhandled error');
+  captureException(err, { tags: { route: c.req.path, method: c.req.method } });
   return c.json({ error: 'internal_error' }, 500);
 });
 
@@ -56,7 +72,9 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('uncaughtException', (err) => {
   logger.error({ err: err.message, stack: err.stack }, 'uncaughtException');
+  captureException(err, { tags: { kind: 'uncaughtException' } });
 });
 process.on('unhandledRejection', (reason) => {
   logger.error({ reason: String(reason) }, 'unhandledRejection');
+  captureException(reason, { tags: { kind: 'unhandledRejection' } });
 });

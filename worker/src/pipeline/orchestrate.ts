@@ -1,4 +1,6 @@
 import { writeFile } from 'node:fs/promises';
+import { config } from '../config.js';
+import { captureMessage } from '../lib/sentry.js';
 import {
   clipRawPath,
   downloadToBuffer,
@@ -20,6 +22,7 @@ import type {
   ZoomMoment,
 } from '../types/db.js';
 import { cropTo9by16, generateThumbnail } from './crop.js';
+import { detectFaces, type FaceTrackResult } from './face-track.js';
 import { ffprobe } from './ffmpeg.js';
 import { renderBurnInCaptions, renderRemotionVariant, shouldUseRemotion } from './render.js';
 import { planVariants } from './score.js';
@@ -39,8 +42,9 @@ export async function runEditPipeline(
   clipId: string,
   deps: PipelineDeps,
 ): Promise<PipelineResult> {
+  const startedAt = Date.now();
   const { clip, styleProfile } = await loadContext(clipId);
-  return await withTempDir(async (dir) => {
+  const result = await withTempDir(async (dir) => {
     const rawLocal = `${dir}/${clipId}.mp4`;
     await downloadRawToLocal(clip, rawLocal);
 
@@ -66,6 +70,15 @@ export async function runEditPipeline(
 
     const placeholderDrafts = await insertRenderingDrafts(clipId, clip.user_id, scoring.variants);
 
+    const faceTrack = await detectFaces({
+      inputPath: rawLocal,
+      outputJsonPath: `${dir}/${clipId}-face.json`,
+    });
+    deps.logger.info(
+      { clip_id: clipId, face_usable: faceTrack.usable, face_reason: faceTrack.reason, samples: faceTrack.samples.length },
+      'face-track result',
+    );
+
     const draftIds: string[] = [];
     for (const [idx, variant] of scoring.variants.entries()) {
       const placeholder = placeholderDrafts[idx];
@@ -79,6 +92,7 @@ export async function runEditPipeline(
           variant,
           styleProfile,
           dir,
+          faceTrack,
         });
         await supabase()
           .from('drafts')
@@ -111,6 +125,17 @@ export async function runEditPipeline(
 
     return { clipId, draftIds };
   });
+
+  const runtimeSeconds = Math.round((Date.now() - startedAt) / 1000);
+  if (runtimeSeconds > config.SLOW_PIPELINE_THRESHOLD_SECONDS) {
+    captureMessage('slow_pipeline', {
+      level: 'warning',
+      tags: { clip_id: clipId },
+      extra: { runtime_seconds: runtimeSeconds, threshold: config.SLOW_PIPELINE_THRESHOLD_SECONDS },
+    });
+    deps.logger.warn({ clip_id: clipId, runtime_seconds: runtimeSeconds }, 'slow pipeline');
+  }
+  return result;
 }
 
 async function loadContext(clipId: string): Promise<{
@@ -170,6 +195,7 @@ interface VariantRenderInput {
   };
   styleProfile: StyleProfileRow | null;
   dir: string;
+  faceTrack: FaceTrackResult;
 }
 
 async function renderVariant(input: VariantRenderInput): Promise<{
@@ -180,12 +206,15 @@ async function renderVariant(input: VariantRenderInput): Promise<{
   const croppedPath = `${input.dir}/${input.clipId}-${input.variant.label}-cropped.mp4`;
   const finalPath = `${input.dir}/${input.clipId}-${input.variant.label}.mp4`;
   const thumbPath = `${input.dir}/${input.clipId}-${input.variant.label}.jpg`;
+  const sendcmdPath = `${input.dir}/${input.clipId}-${input.variant.label}.sendcmd`;
 
   await cropTo9by16({
     inputPath: input.rawLocal,
     outputPath: croppedPath,
     trimStart: input.variant.trim_start,
     trimEnd: input.variant.trim_end,
+    faceTrack: input.faceTrack,
+    sendcmdPath,
   });
 
   if (shouldUseRemotion()) {
@@ -232,7 +261,12 @@ async function renderVariant(input: VariantRenderInput): Promise<{
   });
 
   const probe = await ffprobe(finalPath);
-  await Promise.all([unlinkQuiet(croppedPath), unlinkQuiet(finalPath), unlinkQuiet(thumbPath)]);
+  await Promise.all([
+    unlinkQuiet(croppedPath),
+    unlinkQuiet(finalPath),
+    unlinkQuiet(thumbPath),
+    unlinkQuiet(sendcmdPath),
+  ]);
 
   return {
     outputMp4Url: await getPublicUrl(mp4Dest),

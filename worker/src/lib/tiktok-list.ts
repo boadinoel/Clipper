@@ -1,3 +1,5 @@
+import { fetchWithRetry, HttpStatusError } from './retry.js';
+
 const TIKTOK_API = 'https://open.tiktokapis.com/v2';
 
 export interface TikTokVideo {
@@ -36,15 +38,23 @@ export async function listVideosForConnection(opts: {
   let cursor = 0;
   const want = Math.min(40, opts.maxCount ?? 20);
   while (collected.length < want) {
-    const res = await fetch(`${TIKTOK_API}/video/list/?fields=id,title,video_description,share_url,embed_link,view_count,duration,create_time`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${opts.accessToken}`,
-        'Content-Type': 'application/json',
+    const res = await fetchWithRetry(
+      `${TIKTOK_API}/video/list/?fields=id,title,video_description,share_url,embed_link,view_count,duration,create_time`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${opts.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cursor, max_count: Math.min(20, want - collected.length) }),
       },
-      body: JSON.stringify({ cursor, max_count: Math.min(20, want - collected.length) }),
+      { tag: 'tiktok.video.list' },
+    ).catch((err) => {
+      if (err instanceof HttpStatusError) {
+        throw new Error(`tiktok video.list: ${err.status} ${err.body}`);
+      }
+      throw err;
     });
-    if (!res.ok) throw new Error(`tiktok video.list: ${res.status} ${await res.text()}`);
     const json = (await res.json()) as VideoListResponse;
     if (json.error?.code && json.error.code !== 'ok') {
       throw new Error(`tiktok video.list error: ${json.error.message}`);

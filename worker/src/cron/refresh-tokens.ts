@@ -3,8 +3,16 @@ import { logger } from '../lib/logger.js';
 import { sendPushToUser } from '../lib/push.js';
 import { refreshKickToken } from '../lib/kick.js';
 import { refreshTwitchToken } from '../lib/twitch.js';
+import { fetchWithRetry, HttpStatusError } from '../lib/retry.js';
 import { supabase } from '../lib/supabase.js';
 import { inngest } from '../inngest/client.js';
+
+function rethrow(tag: string, err: unknown): never {
+  if (err instanceof HttpStatusError) {
+    throw new Error(`${tag}: ${err.status} ${err.body}`);
+  }
+  throw err instanceof Error ? err : new Error(`${tag}: ${String(err)}`);
+}
 
 interface PlatformConnRow {
   id: string;
@@ -159,12 +167,15 @@ async function refreshTiktok(refresh: string) {
     grant_type: 'refresh_token',
     refresh_token: refresh,
   });
-  const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error(`tiktok refresh: ${res.status} ${await res.text()}`);
+  const res = await fetchWithRetry(
+    'https://open.tiktokapis.com/v2/oauth/token/',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    },
+    { tag: 'tiktok.refresh' },
+  ).catch((err) => rethrow('tiktok refresh', err));
   const j = (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
   return {
     accessToken: j.access_token,
@@ -180,12 +191,15 @@ async function refreshGoogle(refresh: string) {
     grant_type: 'refresh_token',
     refresh_token: refresh,
   });
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error(`google refresh: ${res.status} ${await res.text()}`);
+  const res = await fetchWithRetry(
+    'https://oauth2.googleapis.com/token',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    },
+    { tag: 'google.refresh' },
+  ).catch((err) => rethrow('google refresh', err));
   const j = (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
   return {
     accessToken: j.access_token,
@@ -201,8 +215,11 @@ async function refreshFacebook(currentToken: string) {
     client_secret: process.env.INSTAGRAM_CLIENT_SECRET ?? '',
     fb_exchange_token: currentToken,
   });
-  const res = await fetch(`https://graph.facebook.com/v21.0/oauth/access_token?${params}`);
-  if (!res.ok) throw new Error(`facebook refresh: ${res.status} ${await res.text()}`);
+  const res = await fetchWithRetry(
+    `https://graph.facebook.com/v21.0/oauth/access_token?${params}`,
+    undefined,
+    { tag: 'facebook.refresh' },
+  ).catch((err) => rethrow('facebook refresh', err));
   const j = (await res.json()) as { access_token: string; expires_in?: number };
   return {
     accessToken: j.access_token,
@@ -222,15 +239,18 @@ async function refreshXToken(refresh: string) {
     refresh_token: refresh,
     client_id: process.env.X_CLIENT_ID ?? '',
   });
-  const res = await fetch('https://api.twitter.com/2/oauth2/token', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${creds}`,
+  const res = await fetchWithRetry(
+    'https://api.twitter.com/2/oauth2/token',
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${creds}`,
+      },
+      body,
     },
-    body,
-  });
-  if (!res.ok) throw new Error(`x refresh: ${res.status} ${await res.text()}`);
+    { tag: 'x.refresh' },
+  ).catch((err) => rethrow('x refresh', err));
   const j = (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
   return {
     accessToken: j.access_token,

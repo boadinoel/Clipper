@@ -1,3 +1,5 @@
+import { fetchWithRetry, HttpStatusError } from './retry.js';
+
 const X_API = 'https://api.twitter.com/2';
 
 export interface XPost {
@@ -40,10 +42,16 @@ export async function listTweetsForConnection(opts: {
     'media.fields': 'type',
     exclude: 'retweets,replies',
   });
-  const res = await fetch(`${X_API}/users/${opts.userId}/tweets?${params}`, {
-    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  const res = await fetchWithRetry(
+    `${X_API}/users/${opts.userId}/tweets?${params}`,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+    { tag: 'x.timeline' },
+  ).catch((err) => {
+    if (err instanceof HttpStatusError) {
+      throw new Error(`x timeline: ${err.status} ${err.body}`);
+    }
+    throw err;
   });
-  if (!res.ok) throw new Error(`x timeline: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as TimelineResponse;
 
   const videoMediaKeys = new Set(

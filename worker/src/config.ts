@@ -41,6 +41,36 @@ const schema = z.object({
 
   FRONTEND_URL: z.string().url(),
   CLIP_DEFAULT_DURATION_SECONDS: z.coerce.number().int().positive().default(30),
+
+  ANTHROPIC_DAILY_CAP_CENTS: z.coerce.number().int().nonnegative().default(500),
+  GROQ_DAILY_CAP_CENTS: z.coerce.number().int().nonnegative().default(200),
+  COST_RAILS_ENFORCEMENT: z
+    .union([z.boolean(), z.string()])
+    .default(true)
+    .transform((v) => (typeof v === 'boolean' ? v : v.toLowerCase() !== 'false')),
+
+  SENTRY_DSN: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined))
+    .pipe(z.string().url().optional()),
+  SENTRY_ENVIRONMENT: z.string().default('production'),
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
+  SLOW_PIPELINE_THRESHOLD_SECONDS: z.coerce.number().int().positive().default(180),
+
+  ADMIN_SECRET: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined))
+    .pipe(z.string().min(20).optional()),
+
+  FACE_TRACK_PYTHON: z.string().default('python3'),
+  FACE_TRACK_SCRIPT: z.string().default('./scripts/face-track.py'),
+  FACE_TRACK_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .default(true)
+    .transform((v) => (typeof v === 'boolean' ? v : v.toLowerCase() !== 'false')),
+  FACE_TRACK_SAMPLE_EVERY: z.coerce.number().int().positive().default(5),
 });
 
 export type Config = z.infer<typeof schema>;

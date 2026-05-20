@@ -2,10 +2,15 @@ import { createReadStream } from 'node:fs';
 import Groq from 'groq-sdk';
 import { config } from '../config.js';
 import type { TranscriptSegment } from '../types/db.js';
+import {
+  estimateGroqWhisperCents,
+  recordActualSpend,
+  reserveOrThrow,
+} from './cost-rails.js';
 
 let client: Groq | null = null;
 function groq(): Groq {
-  if (!client) client = new Groq({ apiKey: config.GROQ_API_KEY });
+  if (!client) client = new Groq({ apiKey: config.GROQ_API_KEY, maxRetries: 4 });
   return client;
 }
 
@@ -16,13 +21,26 @@ export interface TranscriptionResult {
   duration: number;
 }
 
-export async function transcribeFile(opts: { localPath: string }): Promise<TranscriptionResult> {
+const ESTIMATED_SECONDS_BEFORE_PROBE = 60;
+
+export async function transcribeFile(opts: {
+  localPath: string;
+  estimatedAudioSeconds?: number;
+}): Promise<TranscriptionResult> {
+  const estimateSeconds = opts.estimatedAudioSeconds ?? ESTIMATED_SECONDS_BEFORE_PROBE;
+  const estimateCents = estimateGroqWhisperCents(estimateSeconds);
+  await reserveOrThrow('groq', estimateCents);
+
   const res = (await groq().audio.transcriptions.create({
     file: createReadStream(opts.localPath) as unknown as File,
     model: 'whisper-large-v3',
     response_format: 'verbose_json',
     timestamp_granularities: ['segment', 'word'],
   })) as unknown as RawWhisperResponse;
+
+  const actualSeconds = res.duration ?? estimateSeconds;
+  const actualCents = estimateGroqWhisperCents(actualSeconds);
+  await recordActualSpend('groq', actualCents, estimateCents);
 
   const wordsBySegmentIdx = new Map<number, Array<{ start: number; end: number; word: string }>>();
   if (res.words) {

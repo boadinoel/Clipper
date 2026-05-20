@@ -1,4 +1,11 @@
+import { fetchWithRetry, HttpStatusError } from './retry.js';
+
 const YT = 'https://www.googleapis.com/youtube/v3';
+
+function describe(tag: string, err: unknown): Error {
+  if (err instanceof HttpStatusError) return new Error(`${tag}: ${err.status} ${err.body}`);
+  return err instanceof Error ? err : new Error(`${tag}: ${String(err)}`);
+}
 
 export interface YouTubeVideo {
   id: string;
@@ -41,12 +48,13 @@ export async function listVideosForConnection(opts: {
       maxResults: String(maxResults),
       part: 'id,snippet',
     });
-  const searchRes = await fetch(searchUrl, {
-    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  const searchRes = await fetchWithRetry(
+    searchUrl,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+    { tag: 'youtube.search' },
+  ).catch((err) => {
+    throw describe('youtube search', err);
   });
-  if (!searchRes.ok) {
-    throw new Error(`youtube search: ${searchRes.status} ${await searchRes.text()}`);
-  }
   const searchJson = (await searchRes.json()) as SearchResponse;
   const videoIds = (searchJson.items ?? [])
     .map((i) => i.id?.videoId)
@@ -58,12 +66,13 @@ export async function listVideosForConnection(opts: {
       id: videoIds.join(','),
       part: 'snippet,statistics,contentDetails',
     });
-  const videosRes = await fetch(videosUrl, {
-    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  const videosRes = await fetchWithRetry(
+    videosUrl,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+    { tag: 'youtube.videos' },
+  ).catch((err) => {
+    throw describe('youtube videos', err);
   });
-  if (!videosRes.ok) {
-    throw new Error(`youtube videos: ${videosRes.status} ${await videosRes.text()}`);
-  }
   const videosJson = (await videosRes.json()) as VideosResponse;
   return (videosJson.items ?? []).map<YouTubeVideo>((v) => ({
     id: v.id,

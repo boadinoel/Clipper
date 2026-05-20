@@ -1,6 +1,14 @@
 import { config } from '../config.js';
 import { decryptToken, encryptToken } from './crypto.js';
+import { fetchWithRetry, HttpStatusError } from './retry.js';
 import { supabase } from './supabase.js';
+
+function describeKick(tag: string, err: unknown): Error {
+  if (err instanceof HttpStatusError) {
+    return new Error(`${tag} failed: ${err.status} ${err.body}`);
+  }
+  return err instanceof Error ? err : new Error(`${tag} failed: ${String(err)}`);
+}
 
 const KICK_API = 'https://api.kick.com/public/v1';
 const KICK_OAUTH = 'https://id.kick.com/oauth';
@@ -70,12 +78,17 @@ export async function refreshKickToken(refreshToken: string): Promise<{
     client_id: config.KICK_CLIENT_ID,
     client_secret: config.KICK_CLIENT_SECRET,
   });
-  const res = await fetch(`${KICK_OAUTH}/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body,
+  const res = await fetchWithRetry(
+    `${KICK_OAUTH}/token`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    },
+    { tag: 'kick.refresh' },
+  ).catch((err) => {
+    throw describeKick('kick refresh', err);
   });
-  if (!res.ok) throw new Error(`kick refresh failed: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as KickTokenResponse;
   return {
     accessToken: json.access_token,
@@ -100,18 +113,23 @@ export async function createKickClip(opts: {
   broadcasterUserId: string;
   durationSeconds?: number;
 }): Promise<KickClip> {
-  const res = await fetch(`${KICK_API}/clips`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${opts.accessToken}`,
-      'content-type': 'application/json',
+  const res = await fetchWithRetry(
+    `${KICK_API}/clips`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        broadcaster_user_id: opts.broadcasterUserId,
+        duration: opts.durationSeconds ?? 30,
+      }),
     },
-    body: JSON.stringify({
-      broadcaster_user_id: opts.broadcasterUserId,
-      duration: opts.durationSeconds ?? 30,
-    }),
+    { tag: 'kick.createClip' },
+  ).catch((err) => {
+    throw describeKick('kick createClip', err);
   });
-  if (!res.ok) throw new Error(`kick createClip failed: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as { data: KickClip };
   return json.data;
 }
@@ -120,11 +138,17 @@ export async function getKickClip(opts: {
   accessToken: string;
   clipId: string;
 }): Promise<KickClip | null> {
-  const res = await fetch(`${KICK_API}/clips/${opts.clipId}`, {
-    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  const res = await fetchWithRetry(
+    `${KICK_API}/clips/${opts.clipId}`,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+    {
+      tag: 'kick.getClip',
+      acceptStatus: (s) => s < 400 || s === 404,
+    },
+  ).catch((err) => {
+    throw describeKick('kick getClip', err);
   });
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`kick getClip failed: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as { data: KickClip };
   return json.data;
 }
@@ -178,12 +202,13 @@ export async function listBroadcasterClips(opts: {
   url.searchParams.set('limit', String(Math.min(50, opts.first ?? 20)));
   url.searchParams.set('sort', opts.mode === 'most_viewed' ? 'view_count' : 'created_at');
   url.searchParams.set('order', 'desc');
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  const res = await fetchWithRetry(
+    url.toString(),
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+    { tag: 'kick.listClips' },
+  ).catch((err) => {
+    throw describeKick('kick listClips', err);
   });
-  if (!res.ok) {
-    throw new Error(`kick listClips failed: ${res.status} ${await res.text()}`);
-  }
   const json = (await res.json()) as { data: KickClipListItem[] };
   return (json.data ?? []).map<KickBroadcasterClip>((c) => ({
     id: c.id,

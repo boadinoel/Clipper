@@ -1,3 +1,5 @@
+import { fetchWithRetry, HttpStatusError } from './retry.js';
+
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 export interface InstagramMedia {
@@ -37,10 +39,12 @@ export async function listMediaForConnection(opts: {
       limit: String(limit),
       access_token: opts.accessToken,
     });
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`instagram media: ${res.status} ${await res.text()}`);
-  }
+  const res = await fetchWithRetry(url, undefined, { tag: 'instagram.media' }).catch((err) => {
+    if (err instanceof HttpStatusError) {
+      throw new Error(`instagram media: ${err.status} ${err.body}`);
+    }
+    throw err;
+  });
   const json = (await res.json()) as MediaResponse;
   return (json.data ?? [])
     .filter((m) => m.media_type === 'VIDEO' || m.media_type === 'REELS')

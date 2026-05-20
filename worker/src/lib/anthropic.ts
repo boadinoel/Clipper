@@ -9,15 +9,54 @@ import type {
   TranscriptSegment,
   ZoomMoment,
 } from '../types/db.js';
+import {
+  actualAnthropicCents,
+  estimateAnthropicCents,
+  recordActualSpend,
+  reserveOrThrow,
+} from './cost-rails.js';
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
-  if (!client) client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+  if (!client) client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY, maxRetries: 4 });
   return client;
 }
 
 const SCORING_MODEL = 'claude-sonnet-4-6';
 const SIGNAL_MODEL = 'claude-haiku-4-5-20251001';
+
+async function callAnthropic(opts: {
+  model: string;
+  maxTokens: number;
+  system: string;
+  userMessage: string;
+}): Promise<string> {
+  const estimate = estimateAnthropicCents({
+    model: opts.model,
+    inputChars: opts.system.length + opts.userMessage.length,
+    maxTokens: opts.maxTokens,
+  });
+  await reserveOrThrow('anthropic', estimate);
+
+  const res = await anthropic().messages.create({
+    model: opts.model,
+    max_tokens: opts.maxTokens,
+    system: opts.system,
+    messages: [{ role: 'user', content: opts.userMessage }],
+  });
+
+  const actual = actualAnthropicCents({
+    model: opts.model,
+    inputTokens: res.usage?.input_tokens ?? 0,
+    outputTokens: res.usage?.output_tokens ?? 0,
+  });
+  await recordActualSpend('anthropic', actual, estimate);
+
+  return res.content
+    .map((b) => ('text' in b ? b.text : ''))
+    .join('')
+    .trim();
+}
 
 export interface VariantPlan {
   label: 'A' | 'B' | 'C';
@@ -83,16 +122,12 @@ playful, C more experimental.`;
     2,
   );
 
-  const res = await anthropic().messages.create({
+  const text = await callAnthropic({
     model: SCORING_MODEL,
-    max_tokens: 3000,
+    maxTokens: 3000,
     system,
-    messages: [{ role: 'user', content: userMessage }],
+    userMessage,
   });
-  const text = res.content
-    .map((b) => ('text' in b ? b.text : ''))
-    .join('')
-    .trim();
   const json = extractJson(text);
   const parsed = JSON.parse(json) as ScoringResult;
   if (!parsed.variants || parsed.variants.length !== 3) {
@@ -114,35 +149,27 @@ export async function extractRejectionSignal(opts: {
   hookText: string;
   captionExcerpt: string;
 }): Promise<RejectionSignal> {
-  const res = await anthropic().messages.create({
+  const userMessage = JSON.stringify({
+    reason: opts.reason,
+    rejected_variant: {
+      template: opts.template,
+      hook_text: opts.hookText,
+      caption_excerpt: opts.captionExcerpt,
+    },
+    schema: {
+      caption_length_preference: 'short | medium | long (optional)',
+      template_penalty: '{ template, delta: -0.05..-0.3 } (optional)',
+      hook_patterns_disliked: 'string[] (optional)',
+      notes: 'string (optional)',
+    },
+  });
+  const text = await callAnthropic({
     model: SIGNAL_MODEL,
-    max_tokens: 400,
+    maxTokens: 400,
     system:
       'Extract a learning signal for a video-editing style model from a user rejection. Return JSON only.',
-    messages: [
-      {
-        role: 'user',
-        content: JSON.stringify({
-          reason: opts.reason,
-          rejected_variant: {
-            template: opts.template,
-            hook_text: opts.hookText,
-            caption_excerpt: opts.captionExcerpt,
-          },
-          schema: {
-            caption_length_preference: 'short | medium | long (optional)',
-            template_penalty: '{ template, delta: -0.05..-0.3 } (optional)',
-            hook_patterns_disliked: 'string[] (optional)',
-            notes: 'string (optional)',
-          },
-        }),
-      },
-    ],
+    userMessage,
   });
-  const text = res.content
-    .map((b) => ('text' in b ? b.text : ''))
-    .join('')
-    .trim();
   return JSON.parse(extractJson(text)) as RejectionSignal;
 }
 
@@ -204,16 +231,12 @@ Return STRICT JSON matching the provided schema. No prose, no markdown fences.`;
     2,
   );
 
-  const res = await anthropic().messages.create({
+  const text = await callAnthropic({
     model: SCORING_MODEL,
-    max_tokens: 4000,
+    maxTokens: 4000,
     system,
-    messages: [{ role: 'user', content: userMessage }],
+    userMessage,
   });
-  const text = res.content
-    .map((b) => ('text' in b ? b.text : ''))
-    .join('')
-    .trim();
   const parsed = JSON.parse(extractJson(text)) as Omit<
     ReferenceClipAnalysis,
     'samples' | 'source_clip_count' | 'last_synthesized_at'
@@ -235,7 +258,7 @@ Return STRICT JSON matching the provided schema. No prose, no markdown fences.`;
   };
 }
 
-function extractJson(text: string): string {
+export function extractJson(text: string): string {
   const fence = text.match(/```(?:json)?\s*([\s\S]+?)```/);
   if (fence?.[1]) return fence[1].trim();
   const first = text.indexOf('{');

@@ -2,6 +2,8 @@ import WebSocket from 'ws';
 import { config } from '../config.js';
 import { getAppAccessToken, getConnectedTwitchUsers } from '../lib/twitch.js';
 import { logger } from '../lib/logger.js';
+import { fetchWithRetry, HttpStatusError } from '../lib/retry.js';
+import { captureException } from '../lib/sentry.js';
 import { handleStreamOffline, handleStreamOnline } from './handlers.js';
 
 const HUB_URL = 'wss://eventsub.wss.twitch.tv/ws';
@@ -63,7 +65,10 @@ export class TwitchEventSubClient {
     try {
       this.ws = new WebSocket(this.url);
       this.ws.on('open', () => logger.info({}, 'twitch eventsub: websocket open'));
-      this.ws.on('error', (err) => logger.warn({ err: err.message }, 'twitch eventsub: ws error'));
+      this.ws.on('error', (err) => {
+        logger.warn({ err: err.message }, 'twitch eventsub: ws error');
+        captureException(err, { tags: { component: 'twitch_eventsub_ws' } });
+      });
       this.ws.on('close', (code, reason) => {
         logger.warn({ code, reason: reason.toString() }, 'twitch eventsub: ws closed');
         this.sessionId = null;
@@ -74,6 +79,7 @@ export class TwitchEventSubClient {
       this.ws.on('message', (raw) => this.onMessage(raw.toString()));
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, 'twitch eventsub: connect failed');
+      captureException(err, { tags: { component: 'twitch_eventsub_ws', phase: 'connect' } });
       this.reconnectTimer = setTimeout(() => this.connect(), 5000);
     }
   }
@@ -128,26 +134,31 @@ export class TwitchEventSubClient {
   private async subscribe(broadcasterId: string, type: 'stream.online' | 'stream.offline'): Promise<void> {
     if (!this.sessionId) return;
     if (!this.appToken) this.appToken = await getAppAccessToken();
-    const res = await fetch(HELIX_SUB, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.appToken}`,
-        'Client-Id': config.TWITCH_CLIENT_ID,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        type,
-        version: '1',
-        condition: { broadcaster_user_id: broadcasterId },
-        transport: { method: 'websocket', session_id: this.sessionId },
-      }),
-    });
-    if (res.status === 409) return;
-    if (!res.ok) {
-      if (res.status === 401) {
+    try {
+      const res = await fetchWithRetry(
+        HELIX_SUB,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.appToken}`,
+            'Client-Id': config.TWITCH_CLIENT_ID,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            type,
+            version: '1',
+            condition: { broadcaster_user_id: broadcasterId },
+            transport: { method: 'websocket', session_id: this.sessionId },
+          }),
+        },
+        { tag: 'eventsub.subscribe', acceptStatus: (s) => s < 400 || s === 409 },
+      );
+      if (res.status === 409) return;
+    } catch (err) {
+      if (err instanceof HttpStatusError && err.status === 401) {
         this.appToken = null;
       }
-      throw new Error(`subscribe ${type}: ${res.status} ${await res.text()}`);
+      throw err;
     }
   }
 
