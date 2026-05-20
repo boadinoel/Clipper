@@ -11,8 +11,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --enable-source-maps dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval": "tsx scripts/eval.ts",
     "gen:db-types": "supabase gen types typescript --linked > src/types/db.ts",
     "remotion:preview": "remotion preview src/remotion/Root.tsx"
   },

@@ -1,0 +1,26 @@
+{
+  "id": "02-irl-reaction",
+  "transcript": "Wait, hold on, hold on. They actually paid HOW much for that? No way. Show me the receipt. Show me — there's no way. Three thousand dollars? For a CHAIR? Are you kidding me? Chat, would you ever spend three grand on a gaming chair? Please tell me you wouldn't. Like I get it, your back is important, but three thousand? You could buy a used car for that. Insanity.",
+  "transcript_segments": [
+    { "start": 0.0, "end": 2.5, "text": "Wait, hold on, hold on." },
+    { "start": 2.5, "end": 6.0, "text": "They actually paid HOW much for that? No way." },
+    { "start": 6.0, "end": 9.5, "text": "Show me the receipt. Show me — there's no way." },
+    { "start": 9.5, "end": 13.0, "text": "Three thousand dollars? For a CHAIR?" },
+    { "start": 13.0, "end": 16.0, "text": "Are you kidding me?" },
+    { "start": 16.0, "end": 21.0, "text": "Chat, would you ever spend three grand on a gaming chair?" },
+    { "start": 21.0, "end": 23.5, "text": "Please tell me you wouldn't." },
+    { "start": 23.5, "end": 28.0, "text": "Like I get it, your back is important, but three thousand?" },
+    { "start": 28.0, "end": 32.0, "text": "You could buy a used car for that. Insanity." }
+  ],
+  "chat_context": [
+    { "ts": "2026-05-20T13:00:00Z", "user": "viewer1", "message": "lmao bro is shook" },
+    { "ts": "2026-05-20T13:00:03Z", "user": "viewer2", "message": "i would never" },
+    { "ts": "2026-05-20T13:00:06Z", "user": "viewer3", "message": "you can buy a car for that" }
+  ],
+  "duration_seconds": 32.0,
+  "style_profile": {
+    "voice_descriptor": "Conversational IRL streamer; deadpan disbelief; loves audience polls.",
+    "humor_quiz": { "tone": "deadpan", "swearing": "low" }
+  },
+  "ground_truth_notes": "Hook should lean into the price reveal. Variants should differ in template — at least one MemePop to match the 'are you kidding me' beat."
+}

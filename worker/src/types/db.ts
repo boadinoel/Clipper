@@ -125,6 +125,16 @@ export interface DraftRow {
   created_at: string;
 }
 
+export interface PostMetricsSnapshot {
+  views: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  raw?: Record<string, unknown>;
+  fetched_at: string;
+}
+
 export interface PostRow {
   id: string;
   draft_id: string;
@@ -137,7 +147,11 @@ export interface PostRow {
   external_url: string | null;
   status: PostStatus;
   error_message: string | null;
-  metrics: Record<string, unknown> | null;
+  metrics: PostMetricsSnapshot | Record<string, unknown> | null;
+  last_metrics_check_at: string | null;
+  metrics_at_24h: PostMetricsSnapshot | null;
+  metrics_at_7d: PostMetricsSnapshot | null;
+  performance_percentile: number | null;
   created_at: string;
 }
 

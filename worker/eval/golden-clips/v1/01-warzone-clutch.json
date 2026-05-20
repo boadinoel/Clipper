@@ -1,0 +1,26 @@
+{
+  "id": "01-warzone-clutch",
+  "transcript": "Okay we're down to two — no wait, three of them. I've got like twelve health, no plates. Oh my god, oh my GOD, where is he, where is he, THERE — got him! That's one. Behind me! Turn turn turn — yes! Two down. Last guy's gotta be in the building. Listen for the steps. I can hear him reloading. Coming around the corner... LET'S GO! W in the chat, that was insane.",
+  "transcript_segments": [
+    { "start": 0.0, "end": 4.2, "text": "Okay we're down to two — no wait, three of them." },
+    { "start": 4.2, "end": 7.8, "text": "I've got like twelve health, no plates." },
+    { "start": 7.8, "end": 12.5, "text": "Oh my god, oh my GOD, where is he, where is he, THERE — got him!" },
+    { "start": 12.5, "end": 13.6, "text": "That's one." },
+    { "start": 13.6, "end": 17.0, "text": "Behind me! Turn turn turn — yes! Two down." },
+    { "start": 17.0, "end": 20.4, "text": "Last guy's gotta be in the building. Listen for the steps." },
+    { "start": 20.4, "end": 23.0, "text": "I can hear him reloading." },
+    { "start": 23.0, "end": 26.0, "text": "Coming around the corner..." },
+    { "start": 26.0, "end": 28.5, "text": "LET'S GO! W in the chat, that was insane." }
+  ],
+  "chat_context": [
+    { "ts": "2026-05-20T12:00:00Z", "user": "viewer1", "message": "no way bro" },
+    { "ts": "2026-05-20T12:00:05Z", "user": "viewer2", "message": "LETSGOOO" },
+    { "ts": "2026-05-20T12:00:07Z", "user": "viewer3", "message": "W W W" }
+  ],
+  "duration_seconds": 28.5,
+  "style_profile": {
+    "voice_descriptor": "Energetic FPS streamer who escalates volume during fights; uses chat callouts like 'W in the chat'.",
+    "humor_quiz": { "tone": "hype", "swearing": "low" }
+  },
+  "ground_truth_notes": "Best hook is around the comeback moment. Trim should land on 'LET'S GO'. Captions should chunk shorter during the firefight."
+}

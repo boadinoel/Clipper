@@ -1,0 +1,27 @@
+{
+  "id": "03-just-chatting-story",
+  "transcript": "Okay so this happened to me yesterday, you guys are not gonna believe this. I'm at the coffee shop, right, minding my own business, and this dude walks up to me and goes — and I quote — 'are you that streamer my kid watches?' And I'm like, uh, maybe? And he just stares at me. For like a full ten seconds. No expression. And then he goes 'tell him to do his homework.' And walks away. That's it. That's the whole interaction. I'm dead.",
+  "transcript_segments": [
+    { "start": 0.0, "end": 4.5, "text": "Okay so this happened to me yesterday, you guys are not gonna believe this." },
+    { "start": 4.5, "end": 9.5, "text": "I'm at the coffee shop, right, minding my own business," },
+    { "start": 9.5, "end": 13.0, "text": "and this dude walks up to me and goes — and I quote —" },
+    { "start": 13.0, "end": 17.0, "text": "'are you that streamer my kid watches?'" },
+    { "start": 17.0, "end": 19.5, "text": "And I'm like, uh, maybe?" },
+    { "start": 19.5, "end": 23.0, "text": "And he just stares at me. For like a full ten seconds." },
+    { "start": 23.0, "end": 25.0, "text": "No expression." },
+    { "start": 25.0, "end": 28.5, "text": "And then he goes 'tell him to do his homework.'" },
+    { "start": 28.5, "end": 30.5, "text": "And walks away." },
+    { "start": 30.5, "end": 34.0, "text": "That's it. That's the whole interaction. I'm dead." }
+  ],
+  "chat_context": [
+    { "ts": "2026-05-20T14:00:00Z", "user": "viewer1", "message": "no waaaay" },
+    { "ts": "2026-05-20T14:00:05Z", "user": "viewer2", "message": "the dad fr" },
+    { "ts": "2026-05-20T14:00:10Z", "user": "viewer3", "message": "im crying" }
+  ],
+  "duration_seconds": 34.0,
+  "style_profile": {
+    "voice_descriptor": "Story-driven Just Chatting streamer; comic timing; landing the punchline matters more than energy.",
+    "humor_quiz": { "tone": "observational", "swearing": "low" }
+  },
+  "ground_truth_notes": "Hook must tease the dad without giving away the punchline. Trim end should be 'I'm dead.' — cutting earlier kills the joke."
+}

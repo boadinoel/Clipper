@@ -74,6 +74,32 @@ export interface ProfileReferencesAddedData {
   classification: ReferenceClassification;
 }
 
+export interface MetricsPostCheckData {
+  post_id: string;
+}
+
+export interface MetricsPostScoredData {
+  post_id: string;
+  user_id: string;
+  draft_id: string;
+  platform: Platform;
+  views: number;
+  performance_percentile: number;
+}
+
+export interface EvalSampleRecordedData {
+  clip_id: string;
+  user_id: string;
+  golden_set_version: string;
+  scoring_input: {
+    transcript: string;
+    duration_seconds: number;
+    chat_context_count: number;
+    style_profile_present: boolean;
+  };
+  variants: unknown;
+}
+
 export type InngestEvents = {
   'clip/manual.requested': { data: ClipManualRequestedData; user: { id: string } };
   'clip/created': { data: ClipCreatedData };
@@ -85,4 +111,7 @@ export type InngestEvents = {
   'style_profile/updated': { data: StyleProfileUpdatedData };
   'profile/ingest.requested': { data: ProfileIngestRequestedData };
   'profile/references.added': { data: ProfileReferencesAddedData };
+  'metrics/post.check': { data: MetricsPostCheckData };
+  'metrics/post.scored': { data: MetricsPostScoredData };
+  'eval/sample.recorded': { data: EvalSampleRecordedData };
 };

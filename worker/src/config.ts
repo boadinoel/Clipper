@@ -71,6 +71,9 @@ const schema = z.object({
     .default(true)
     .transform((v) => (typeof v === 'boolean' ? v : v.toLowerCase() !== 'false')),
   FACE_TRACK_SAMPLE_EVERY: z.coerce.number().int().positive().default(5),
+
+  EVAL_GOLDEN_SET_VERSION: z.string().default('v1'),
+  EVAL_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
 });
 
 export type Config = z.infer<typeof schema>;

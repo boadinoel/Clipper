@@ -60,13 +60,16 @@ export async function runEditPipeline(
 
     const durationSeconds = transcription.duration || clip.duration_seconds || 30;
 
-    const scoring = await planVariants({
-      transcript: transcription.text,
-      transcriptSegments: transcription.segments,
-      chatContext: (clip.chat_context ?? []) as ChatContextEntry[],
-      styleProfile,
-      durationSeconds,
-    });
+    const scoring = await planVariants(
+      {
+        transcript: transcription.text,
+        transcriptSegments: transcription.segments,
+        chatContext: (clip.chat_context ?? []) as ChatContextEntry[],
+        styleProfile,
+        durationSeconds,
+      },
+      { clipId, userId: clip.user_id },
+    );
 
     const placeholderDrafts = await insertRenderingDrafts(clipId, clip.user_id, scoring.variants);
 
