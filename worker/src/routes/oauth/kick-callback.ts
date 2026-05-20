@@ -3,6 +3,7 @@ import { config } from '../../config.js';
 import { encryptToken } from '../../lib/crypto.js';
 import { logger } from '../../lib/logger.js';
 import { supabase } from '../../lib/supabase.js';
+import { inngest } from '../../inngest/client.js';
 import { clearStateCookies, frontendRedirect, verifyStateCookie } from './shared.js';
 
 export const kickOauthRoute = new Hono();
@@ -84,6 +85,16 @@ kickOauthRoute.get(CALLBACK_PATH, async (c) => {
     logger.error({ err: error.message }, 'kick callback: users update failed');
     return c.text('save failed', 500);
   }
+
+  await inngest.send({
+    name: 'profile/ingest.requested',
+    data: {
+      user_id: verified.userId,
+      source: 'streaming',
+      platform: 'kick',
+      reason: 'oauth_connect',
+    },
+  });
 
   clearStateCookies(c);
   return c.redirect(frontendRedirect('onboarding'));

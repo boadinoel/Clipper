@@ -7,9 +7,12 @@ import {
   postScheduledAck,
   postScheduledCron,
 } from './functions/post-scheduled-publisher.js';
+import { profileIngest } from './functions/profile-ingest.js';
+import { profileReferencesAdded } from './functions/profile-references-added.js';
 import { pushFanOutOnEditComplete } from './functions/push-fan-out.js';
 import { refreshTokensCron } from '../cron/refresh-tokens.js';
 import { cleanupStorageCron } from '../cron/cleanup-storage.js';
+import { refreshProfilesCron } from '../cron/refresh-profiles.js';
 
 export const inngestFunctions = [
   clipManualRequested,
@@ -22,4 +25,7 @@ export const inngestFunctions = [
   pushFanOutOnEditComplete,
   refreshTokensCron,
   cleanupStorageCron,
+  profileIngest,
+  profileReferencesAdded,
+  refreshProfilesCron,
 ];

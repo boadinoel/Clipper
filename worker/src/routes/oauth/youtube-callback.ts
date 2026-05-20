@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { config } from '../../config.js';
+import { inngest } from '../../inngest/client.js';
 import { logger } from '../../lib/logger.js';
 import {
   buildRedirectUri,
@@ -73,6 +74,16 @@ youtubeOauthRoute.get(CALLBACK_PATH, async (c) => {
       expiresAt: new Date(Date.now() + token.expires_in * 1000).toISOString(),
       accountId: channel.id,
       accountUsername: channel.snippet.customUrl ?? channel.snippet.title,
+    },
+  });
+
+  await inngest.send({
+    name: 'profile/ingest.requested',
+    data: {
+      user_id: verified.userId,
+      source: 'social',
+      platform: 'youtube_shorts',
+      reason: 'oauth_connect',
     },
   });
 

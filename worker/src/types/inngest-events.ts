@@ -53,6 +53,27 @@ export interface StyleProfileUpdatedData {
   fields_changed: string[];
 }
 
+export type IngestSource = 'streaming' | 'social' | 'full';
+export type IngestPlatform = Platform | 'twitch' | 'kick';
+export type IngestReason = 'oauth_connect' | 'weekly_cron' | 'manual';
+
+export interface ProfileIngestRequestedData {
+  user_id: string;
+  source: IngestSource;
+  platform?: IngestPlatform;
+  reason: IngestReason;
+}
+
+export type ReferenceClassification = 'self' | 'reference' | 'aspirational';
+export type HandlePlatform = 'tiktok' | 'youtube';
+
+export interface ProfileReferencesAddedData {
+  user_id: string;
+  urls?: string[];
+  handles?: Array<{ platform: HandlePlatform; handle: string }>;
+  classification: ReferenceClassification;
+}
+
 export type InngestEvents = {
   'clip/manual.requested': { data: ClipManualRequestedData; user: { id: string } };
   'clip/created': { data: ClipCreatedData };
@@ -62,4 +83,6 @@ export type InngestEvents = {
   'post/publish.now': { data: PostPublishNowData; user: { id: string } };
   'post/scheduled': { data: PostScheduledData; user: { id: string } };
   'style_profile/updated': { data: StyleProfileUpdatedData };
+  'profile/ingest.requested': { data: ProfileIngestRequestedData };
+  'profile/references.added': { data: ProfileReferencesAddedData };
 };

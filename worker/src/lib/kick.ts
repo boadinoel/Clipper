@@ -144,3 +144,55 @@ export async function pollUntilKickClipReady(opts: {
   }
   throw new Error(`kick clip ${opts.clipId} did not resolve in time`);
 }
+
+export interface KickBroadcasterClip {
+  id: string;
+  url: string;
+  broadcasterId: string;
+  title: string;
+  viewCount: number;
+  durationSeconds: number;
+  thumbnailUrl: string;
+  createdAt: string;
+}
+
+interface KickClipListItem {
+  id: string;
+  url: string;
+  broadcaster_user_id: string;
+  title: string;
+  view_count?: number;
+  duration: number;
+  thumbnail_url?: string;
+  created_at: string;
+}
+
+export async function listBroadcasterClips(opts: {
+  accessToken: string;
+  broadcasterUserId: string;
+  mode: 'most_viewed' | 'most_recent';
+  first?: number;
+}): Promise<KickBroadcasterClip[]> {
+  const url = new URL(`${KICK_API}/clips`);
+  url.searchParams.set('broadcaster_user_id', opts.broadcasterUserId);
+  url.searchParams.set('limit', String(Math.min(50, opts.first ?? 20)));
+  url.searchParams.set('sort', opts.mode === 'most_viewed' ? 'view_count' : 'created_at');
+  url.searchParams.set('order', 'desc');
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  });
+  if (!res.ok) {
+    throw new Error(`kick listClips failed: ${res.status} ${await res.text()}`);
+  }
+  const json = (await res.json()) as { data: KickClipListItem[] };
+  return (json.data ?? []).map<KickBroadcasterClip>((c) => ({
+    id: c.id,
+    url: c.url,
+    broadcasterId: c.broadcaster_user_id,
+    title: c.title,
+    viewCount: c.view_count ?? 0,
+    durationSeconds: c.duration,
+    thumbnailUrl: c.thumbnail_url ?? '',
+    createdAt: c.created_at,
+  }));
+}

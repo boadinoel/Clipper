@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { config } from '../../config.js';
+import { inngest } from '../../inngest/client.js';
 import { logger } from '../../lib/logger.js';
 import {
   buildRedirectUri,
@@ -94,6 +95,16 @@ instagramOauthRoute.get(CALLBACK_PATH, async (c) => {
         : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString(),
       accountId: igAccount.id,
       accountUsername: igAccount.username,
+    },
+  });
+
+  await inngest.send({
+    name: 'profile/ingest.requested',
+    data: {
+      user_id: verified.userId,
+      source: 'social',
+      platform: 'instagram_reels',
+      reason: 'oauth_connect',
     },
   });
 

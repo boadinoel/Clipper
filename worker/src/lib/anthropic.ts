@@ -3,6 +3,8 @@ import { config } from '../config.js';
 import type {
   CaptionSegment,
   ChatContextEntry,
+  ReferenceClipAnalysis,
+  ReferenceSample,
   StyleProfileRow,
   TranscriptSegment,
   ZoomMoment,
@@ -60,6 +62,7 @@ playful, C more experimental.`;
         voice_descriptor: opts.styleProfile.voice_descriptor,
         humor_quiz: opts.styleProfile.humor_quiz,
         learned_preferences: learned,
+        reference_clip_analysis: opts.styleProfile.reference_clip_analysis,
       },
       output_schema: {
         variants: [
@@ -141,6 +144,95 @@ export async function extractRejectionSignal(opts: {
     .join('')
     .trim();
   return JSON.parse(extractJson(text)) as RejectionSignal;
+}
+
+export interface SynthesisInputSample {
+  url: string;
+  platform: ReferenceSample['platform'];
+  classification: ReferenceSample['classification'];
+  title?: string;
+  viewCount?: number;
+  durationSeconds: number;
+  transcript: string;
+  transcriptExcerpt: string;
+}
+
+export async function synthesizeReferenceProfile(opts: {
+  samples: SynthesisInputSample[];
+  styleProfile: StyleProfileRow | null;
+}): Promise<ReferenceClipAnalysis> {
+  const system = `You are studying a streamer's most-viewed and most-recent clips
+to model their voice, humor, what their audience reacts to, and what hook patterns earned views.
+
+Inputs include three classifications:
+- "self": the streamer's own content (Twitch, Kick, or their connected social accounts).
+- "reference": their public handles on other platforms (likely theirs, not verified).
+- "aspirational": clips of OTHER creators they want to learn from — extract the *moves*, not the persona, into "aspirational_takeaways". Do NOT confuse aspirational style with their own voice.
+
+Return STRICT JSON matching the provided schema. No prose, no markdown fences.`;
+
+  const samplesForPrompt = opts.samples.map((s) => ({
+    url: s.url,
+    platform: s.platform,
+    classification: s.classification,
+    title: s.title,
+    view_count: s.viewCount,
+    duration_seconds: s.durationSeconds,
+    transcript_excerpt: s.transcriptExcerpt,
+  }));
+
+  const userMessage = JSON.stringify(
+    {
+      existing_voice_descriptor: opts.styleProfile?.voice_descriptor ?? null,
+      existing_humor_quiz: opts.styleProfile?.humor_quiz ?? null,
+      samples: samplesForPrompt,
+      output_schema: {
+        voice_descriptor: 'string (1-2 sentences)',
+        humor_profile: { primary: 'string', notes: 'string' },
+        content_themes: 'string[]',
+        hook_patterns_observed: [
+          { pattern: 'string', examples: 'string[]', evidence_view_count: 'number?' },
+        ],
+        pacing: { preferred_clip_seconds: 'number', typical_payoff_at_pct: 'number 0..1' },
+        audience_signals: { what_they_click: 'string', what_underperforms: 'string' },
+        vocabulary_quirks: 'string[]',
+        caption_style_inference: 'short | medium | long',
+        aspirational_takeaways: 'string[]?',
+      },
+    },
+    null,
+    2,
+  );
+
+  const res = await anthropic().messages.create({
+    model: SCORING_MODEL,
+    max_tokens: 4000,
+    system,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+  const text = res.content
+    .map((b) => ('text' in b ? b.text : ''))
+    .join('')
+    .trim();
+  const parsed = JSON.parse(extractJson(text)) as Omit<
+    ReferenceClipAnalysis,
+    'samples' | 'source_clip_count' | 'last_synthesized_at'
+  >;
+
+  return {
+    ...parsed,
+    samples: opts.samples.map<ReferenceSample>((s) => ({
+      url: s.url,
+      platform: s.platform,
+      title: s.title,
+      view_count: s.viewCount,
+      classification: s.classification,
+      transcript_excerpt: s.transcriptExcerpt,
+      duration_seconds: s.durationSeconds,
+    })),
+    source_clip_count: opts.samples.length,
+    last_synthesized_at: new Date().toISOString(),
+  };
 }
 
 function extractJson(text: string): string {

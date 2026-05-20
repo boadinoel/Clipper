@@ -176,6 +176,68 @@ export async function getStreamsByUserIds(opts: {
   return json.data ?? [];
 }
 
+export interface BroadcasterClip {
+  id: string;
+  url: string;
+  embedUrl: string;
+  broadcasterId: string;
+  title: string;
+  viewCount: number;
+  durationSeconds: number;
+  vodOffsetSeconds: number | null;
+  thumbnailUrl: string;
+  createdAt: string;
+}
+
+interface HelixClip {
+  id: string;
+  url: string;
+  embed_url: string;
+  broadcaster_id: string;
+  title: string;
+  view_count: number;
+  duration: number;
+  vod_offset: number | null;
+  thumbnail_url: string;
+  created_at: string;
+}
+
+export async function listBroadcasterClips(opts: {
+  accessToken: string;
+  broadcasterId: string;
+  mode: 'most_viewed' | 'most_recent';
+  first?: number;
+}): Promise<BroadcasterClip[]> {
+  const url = new URL(`${HELIX}/clips`);
+  url.searchParams.set('broadcaster_id', opts.broadcasterId);
+  url.searchParams.set('first', String(Math.min(100, opts.first ?? 20)));
+  if (opts.mode === 'most_recent') {
+    const startedAt = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+    url.searchParams.set('started_at', startedAt);
+  }
+  const res = await fetch(url, { headers: helixHeaders(opts.accessToken) });
+  if (!res.ok) {
+    throw new Error(`twitch listClips failed: ${res.status} ${await res.text()}`);
+  }
+  const json = (await res.json()) as { data: HelixClip[] };
+  const clips = (json.data ?? []).map<BroadcasterClip>((c) => ({
+    id: c.id,
+    url: c.url,
+    embedUrl: c.embed_url,
+    broadcasterId: c.broadcaster_id,
+    title: c.title,
+    viewCount: c.view_count,
+    durationSeconds: c.duration,
+    vodOffsetSeconds: c.vod_offset,
+    thumbnailUrl: c.thumbnail_url,
+    createdAt: c.created_at,
+  }));
+  if (opts.mode === 'most_recent') {
+    clips.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  return clips;
+}
+
 export async function getAppAccessToken(): Promise<string> {
   const body = new URLSearchParams({
     grant_type: 'client_credentials',

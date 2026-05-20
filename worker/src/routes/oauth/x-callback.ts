@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { config } from '../../config.js';
+import { inngest } from '../../inngest/client.js';
 import { logger } from '../../lib/logger.js';
 import {
   buildRedirectUri,
@@ -72,6 +73,16 @@ xOauthRoute.get(CALLBACK_PATH, async (c) => {
       expiresAt: new Date(Date.now() + token.expires_in * 1000).toISOString(),
       accountId: me.data?.username ?? me.data?.id,
       accountUsername: me.data?.username ?? me.data?.id,
+    },
+  });
+
+  await inngest.send({
+    name: 'profile/ingest.requested',
+    data: {
+      user_id: verified.userId,
+      source: 'social',
+      platform: 'x',
+      reason: 'oauth_connect',
     },
   });
 

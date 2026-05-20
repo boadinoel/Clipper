@@ -186,6 +186,51 @@ export interface LearnedPreferences {
   updated_at?: string;
 }
 
+export type ReferenceClassification = 'self' | 'reference' | 'aspirational';
+export type ReferencePlatform =
+  | 'twitch'
+  | 'kick'
+  | 'tiktok'
+  | 'youtube'
+  | 'instagram'
+  | 'x'
+  | 'other';
+export type HandlePlatform = 'tiktok' | 'youtube';
+
+export interface ReferenceSample {
+  url: string;
+  platform: ReferencePlatform;
+  title?: string;
+  view_count?: number;
+  classification: ReferenceClassification;
+  transcript_excerpt: string;
+  duration_seconds: number;
+}
+
+export interface ReferenceClipAnalysis {
+  voice_descriptor: string;
+  humor_profile: { primary: string; notes: string };
+  content_themes: string[];
+  hook_patterns_observed: Array<{
+    pattern: string;
+    examples: string[];
+    evidence_view_count?: number;
+  }>;
+  pacing: { preferred_clip_seconds: number; typical_payoff_at_pct: number };
+  audience_signals: { what_they_click: string; what_underperforms: string };
+  vocabulary_quirks: string[];
+  caption_style_inference: 'short' | 'medium' | 'long';
+  aspirational_takeaways?: string[];
+  samples: ReferenceSample[];
+  source_clip_count: number;
+  last_synthesized_at: string;
+}
+
+export interface ReferencePending {
+  urls?: Array<{ url: string; classification: ReferenceClassification }>;
+  handles?: Array<{ platform: HandlePlatform; handle: string; classification: ReferenceClassification }>;
+}
+
 export interface StyleProfileRow {
   id: string;
   user_id: string;
@@ -196,7 +241,8 @@ export interface StyleProfileRow {
   voice_descriptor: string | null;
   humor_quiz: Record<string, unknown> | null;
   reference_clip_urls: string[] | null;
-  reference_clip_analysis: Record<string, unknown> | null;
+  reference_clip_analysis: ReferenceClipAnalysis | null;
+  reference_pending: ReferencePending | null;
   learned_preferences: LearnedPreferences | null;
   created_at: string;
   updated_at: string;
